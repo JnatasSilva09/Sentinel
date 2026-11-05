@@ -9,12 +9,12 @@ internal interface ILinhaComGravidade
     Gravidade Gravidade { get; }
 }
 
-internal sealed record LinhaEvento(DateTime DataHora, string Dispositivo, string Tipo, string Nivel, Gravidade Gravidade, string Descricao)
+internal sealed record LinhaEvento(int Id, DateTime DataHora, string Dispositivo, string Tipo, string Nivel, Gravidade Gravidade, string Descricao)
     : ILinhaComGravidade
 {
     /// <summary>O evento precisa vir com o Device carregado.</summary>
     public static LinhaEvento De(SecurityEvent e)
-        => new(e.DataHora, e.Device.Nome, e.Tipo.Rotulo(), e.Gravidade.Rotulo(), e.Gravidade, e.Descricao);
+        => new(e.Id, e.DataHora, e.Device.Nome, e.Tipo.Rotulo(), e.Gravidade.Rotulo(), e.Gravidade, e.Descricao);
 }
 
 internal sealed record LinhaAlerta(int Id, DateTime DataHora, string Dispositivo, string Regra, string Nivel, Gravidade Gravidade, string Descricao)

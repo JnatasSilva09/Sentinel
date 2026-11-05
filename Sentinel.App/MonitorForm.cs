@@ -1,3 +1,4 @@
+using Sentinel.Core.Assistente;
 using Sentinel.Core.Enums;
 using Sentinel.Core.Services;
 
@@ -8,18 +9,24 @@ public class MonitorForm : Form
 {
     private readonly MonitoramentoService _servico;
     private readonly IncidentService _incidentes;
+    private readonly AssistenteService _assistente;
+    private readonly ExecutorIa _ia;
     private readonly DataGridView _gradeEventos = Grades.Criar();
     private readonly DataGridView _gradeAlertas = Grades.Criar();
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 2000 };
     private readonly CheckBox _chkAuto = new() { Text = "Automático (a cada 2 s)", AutoSize = true, Padding = new Padding(8, 4, 0, 0) };
     private readonly Button _btnIncidente = new() { Text = "Abrir incidente do alerta selecionado", AutoSize = true, Enabled = false };
+    private readonly Button _btnExplicar = new() { Text = "Explicar alerta (IA)", AutoSize = true, Enabled = false };
+    private readonly Button _btnClassificar = new() { Text = "Sugerir gravidade do evento (IA)", AutoSize = true, Enabled = false };
     private readonly Label _lblStatus = new() { Dock = DockStyle.Bottom, Height = 28, Padding = new Padding(8, 6, 0, 0) };
     private readonly ToolTip _dicas = new();
 
-    internal MonitorForm(MonitoramentoService servico, IncidentService incidentes)
+    internal MonitorForm(MonitoramentoService servico, IncidentService incidentes, AssistenteService assistente)
     {
         _servico = servico;
         _incidentes = incidentes;
+        _assistente = assistente;
+        _ia = new ExecutorIa(this);
 
         Text = "SENTINEL — Monitoramento (dados simulados)";
         MinimumSize = new Size(900, 520);
@@ -30,7 +37,15 @@ public class MonitorForm : Form
 
         _timer.Tick += (_, _) => ExecutarUm(() => _servico.SimularEvento());
         _chkAuto.CheckedChanged += (_, _) => _timer.Enabled = _chkAuto.Checked;
-        _gradeAlertas.SelectionChanged += (_, _) => _btnIncidente.Enabled = _gradeAlertas.CurrentRow?.DataBoundItem is LinhaAlerta;
+        _gradeAlertas.SelectionChanged += (_, _) =>
+        {
+            var temAlerta = _gradeAlertas.CurrentRow?.DataBoundItem is LinhaAlerta;
+            _btnIncidente.Enabled = temAlerta;
+            _btnExplicar.Enabled = temAlerta;
+        };
+        _gradeEventos.SelectionChanged += (_, _) => _btnClassificar.Enabled = _gradeEventos.CurrentRow?.DataBoundItem is LinhaEvento;
+        _btnExplicar.Click += async (_, _) => await ExplicarAlerta();
+        _btnClassificar.Click += async (_, _) => await SugerirGravidade();
         _btnIncidente.Click += (_, _) => AbrirIncidente();
         FormClosed += (_, _) => { _timer.Stop(); _timer.Dispose(); };
 
@@ -59,6 +74,8 @@ public class MonitorForm : Form
         barra.Controls.Add(_chkAuto);
         barra.Controls.Add(Botao("Limpar dados", "Apaga eventos e alertas simulados (incidentes são mantidos)", ConfirmarLimpeza));
 
+        _dicas.SetToolTip(_btnExplicar, "O assistente explica o alerta e sugere medidas preventivas");
+        _dicas.SetToolTip(_btnClassificar, "O assistente sugere uma gravidade; você decide se aplica");
         _dicas.SetToolTip(_btnIncidente, "Cria um incidente com os eventos que dispararam o alerta");
 
         _gradeEventos.Columns.AddRange(
@@ -81,9 +98,14 @@ public class MonitorForm : Form
 
         var barraAlertas = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(4, 0, 4, 2) };
         barraAlertas.Controls.Add(_btnIncidente);
+        barraAlertas.Controls.Add(_btnExplicar);
 
         var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 300 };
+        var barraEventos = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(4, 0, 4, 2) };
+        barraEventos.Controls.Add(_btnClassificar);
+
         split.Panel1.Controls.Add(_gradeEventos);
+        split.Panel1.Controls.Add(barraEventos);
         split.Panel1.Controls.Add(Titulo("Eventos de segurança (mais recentes primeiro)"));
         split.Panel2.Controls.Add(_gradeAlertas);
         split.Panel2.Controls.Add(barraAlertas);
@@ -155,8 +177,60 @@ public class MonitorForm : Form
             "Não consegui abrir o incidente. Nada foi alterado.");
         if (incidente is null) return;
 
-        using var detalhe = new IncidenteDetalheForm(_incidentes, incidente.Id);
+        using var detalhe = new IncidenteDetalheForm(_incidentes, _assistente, incidente.Id);
         detalhe.ShowDialog(this);
+    }
+
+    private async Task ExplicarAlerta()
+    {
+        if (_gradeAlertas.CurrentRow?.DataBoundItem is not LinhaAlerta alerta) return;
+
+        await _ia.ExecutarAsync(
+            ct => _assistente.ExplicarAlertaAsync(alerta.Id, ct),
+            analise =>
+            {
+                var texto = analise.Explicacao
+                    + Environment.NewLine + Environment.NewLine + "Medidas preventivas:" + Environment.NewLine
+                    + string.Join(Environment.NewLine, analise.Medidas.Select((m, i) => $"{i + 1}. {m}"))
+                    + Environment.NewLine + Environment.NewLine + $"Risco sugerido: {analise.RiscoSugerido.Rotulo()}";
+                using var janela = new ResultadoIaForm($"Explicação do alerta — {alerta.Regra}", analise.Fonte, texto);
+                janela.ShowDialog(this);
+            },
+            _btnExplicar, _btnClassificar);
+    }
+
+    private async Task SugerirGravidade()
+    {
+        if (_gradeEventos.CurrentRow?.DataBoundItem is not LinhaEvento evento) return;
+
+        await _ia.ExecutarAsync(
+            ct => _assistente.SugerirGravidadeAsync(evento.Id, ct),
+            sugestao =>
+            {
+                var texto = $"Gravidade atual: {evento.Gravidade.Rotulo()}" + Environment.NewLine +
+                            $"Gravidade sugerida: {sugestao.Gravidade.Rotulo()}" + Environment.NewLine + Environment.NewLine +
+                            sugestao.Justificativa;
+
+                var podeAplicar = sugestao.Gravidade != evento.Gravidade;
+                using var janela = new ResultadoIaForm(
+                    "Sugestão de gravidade", sugestao.Fonte, texto,
+                    podeAplicar ? $"Aplicar \"{sugestao.Gravidade.Rotulo()}\"" : null,
+                    podeAplicar ? () => AplicarGravidade(evento.Id, sugestao.Gravidade) : null);
+                janela.ShowDialog(this);
+            },
+            _btnExplicar, _btnClassificar);
+    }
+
+    // A IA só sugere: a mudança só acontece aqui, depois do clique de uma pessoa.
+    private bool AplicarGravidade(int eventoId, Gravidade nova)
+    {
+        var ok = Dialogos.Tentar(() => _servico.ReclassificarEvento(eventoId, nova), "Não consegui alterar a gravidade. Nada foi alterado.");
+        if (ok)
+        {
+            Recarregar();
+            _lblStatus.Text = $"Gravidade do evento alterada para {nova.Rotulo()} (sugestão aceita por você).";
+        }
+        return ok;
     }
 
     private void ConfirmarLimpeza()

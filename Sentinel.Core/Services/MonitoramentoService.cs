@@ -90,6 +90,22 @@ public class MonitoramentoService
         return resultados;
     }
 
+    /// <summary>
+    /// Muda a gravidade de um evento já registrado (por exemplo, depois que a pessoa confirma uma sugestão da IA).
+    /// Não reavalia as regras de detecção: alertas já emitidos continuam como estão.
+    /// </summary>
+    public void ReclassificarEvento(int eventoId, Gravidade nova)
+    {
+        if (!Enum.IsDefined(nova)) throw new RegraDeNegocioException("Gravidade inválida.");
+
+        var evento = _repositorio.ObterEvento(eventoId)
+            ?? throw new RegraDeNegocioException("Evento não encontrado. Ele pode ter sido apagado.");
+        if (evento.Gravidade == nova)
+            throw new RegraDeNegocioException($"A gravidade do evento já é \"{nova.Rotulo()}\".");
+
+        _repositorio.AtualizarGravidadeDoEvento(eventoId, nova);
+    }
+
     public IReadOnlyList<SecurityEvent> UltimosEventos(int quantidade = 200)
         => _repositorio.UltimosEventos(Math.Clamp(quantidade, 1, 1000));
 

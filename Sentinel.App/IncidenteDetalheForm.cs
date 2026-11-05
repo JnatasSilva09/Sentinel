@@ -1,3 +1,4 @@
+using Sentinel.Core.Assistente;
 using Sentinel.Core.Enums;
 using Sentinel.Core.Services;
 
@@ -7,6 +8,8 @@ namespace Sentinel.App;
 public class IncidenteDetalheForm : Form
 {
     private readonly IncidentService _servico;
+    private readonly AssistenteService _assistente;
+    private readonly ExecutorIa _ia;
     private readonly int _id;
 
     private readonly Label _lblTitulo = new() { Dock = DockStyle.Top, Height = 36, Font = new Font("Segoe UI", 13f, FontStyle.Bold), Padding = new Padding(8, 6, 0, 0) };
@@ -23,9 +26,11 @@ public class IncidenteDetalheForm : Form
     private readonly FlowLayoutPanel _flowStatus = new() { AutoSize = true, WrapContents = true };
     private readonly ComboBox _cmbRisco = new() { DropDownStyle = ComboBoxStyle.DropDownList, FormattingEnabled = true, Width = 100 };
 
-    public IncidenteDetalheForm(IncidentService servico, int id)
+    public IncidenteDetalheForm(IncidentService servico, AssistenteService assistente, int id)
     {
         _servico = servico;
+        _assistente = assistente;
+        _ia = new ExecutorIa(this);
         _id = id;
 
         MinimumSize = new Size(820, 560);
@@ -41,7 +46,7 @@ public class IncidenteDetalheForm : Form
         _cmbRisco.DataSource = Enum.GetValues<Gravidade>();
         _cmbRisco.Format += (_, e) => { if (e.ListItem is Gravidade g) e.Value = g.Rotulo(); };
 
-        var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 200};
+        var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 200 };
         split.Panel1.Controls.Add(_gradeEventos);
         split.Panel1.Controls.Add(Secao("Eventos vinculados"));
         split.Panel2.Controls.Add(_txtHistorico);
@@ -52,6 +57,9 @@ public class IncidenteDetalheForm : Form
         var btnRisco = new Button { Text = "Alterar risco", AutoSize = true };
         btnRisco.Click += (_, _) => AlterarRisco();
 
+        var btnResumo = new Button { Text = "Resumir incidente (IA)", AutoSize = true };
+        btnResumo.Click += async (_, _) => await Resumir(btnResumo);
+
         var acoes = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, Padding = new Padding(0, 4, 0, 0) };
         acoes.Controls.Add(btnNota);
         acoes.Controls.Add(new Label { Text = "  Mover para:", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
@@ -59,6 +67,7 @@ public class IncidenteDetalheForm : Form
         acoes.Controls.Add(new Label { Text = "  Risco:", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
         acoes.Controls.Add(_cmbRisco);
         acoes.Controls.Add(btnRisco);
+        acoes.Controls.Add(btnResumo);
 
         var rodape = new Panel { Dock = DockStyle.Bottom, Height = 130, Padding = new Padding(8, 4, 8, 4) };
         rodape.Controls.Add(acoes);
@@ -130,6 +139,31 @@ public class IncidenteDetalheForm : Form
         (StatusIncidente.EmAnalise, StatusIncidente.Aberto) => "Devolver para Aberto",
         _ => destino.Rotulo()
     };
+
+    private async Task Resumir(Button botao)
+    {
+        await _ia.ExecutarAsync(
+            ct => _assistente.ResumirIncidenteAsync(_id, ct),
+            resumo =>
+            {
+                using var janela = new ResultadoIaForm(
+                    "Resumo do incidente", resumo.Fonte, resumo.Texto, "Salvar no histórico",
+                    () => SalvarResumo(resumo));
+                janela.ShowDialog(this);
+            },
+            botao);
+    }
+
+    // O resumo só entra no histórico se a pessoa pedir, e fica marcado como gerado por IA.
+    private bool SalvarResumo(ResumoIncidente resumo)
+    {
+        var texto = $"[Resumo gerado por IA: {resumo.Fonte}] {resumo.Texto}";
+        if (texto.Length > IncidentService.TamanhoMaximoNota) texto = texto[..(IncidentService.TamanhoMaximoNota - 1)] + "…";
+
+        if (!Dialogos.Tentar(() => _servico.AdicionarNota(_id, texto), "Não consegui salvar o resumo. Nada foi alterado.")) return false;
+        Recarregar();
+        return true;
+    }
 
     private void AdicionarNota()
     {

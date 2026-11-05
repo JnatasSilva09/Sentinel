@@ -11,7 +11,7 @@ Aplicação desktop que simula o painel de uma equipe de segurança da informaç
 | 1 | Estrutura, banco, dispositivos | ✅ |
 | 2 | Simulador e regras de detecção | ✅ |
 | 3 | Incidentes e dashboard | ✅ |
-| 4 | Assistente de IA | ⏳ |
+| 4 | Assistente de IA | ✅ |
 | 5 | Relatórios PDF, testes, README | ⏳ |
 
 ## Stack
@@ -24,6 +24,7 @@ C# · .NET 8 · WinForms · SQLite · Entity Framework Core · xUnit
 Sentinel.sln
 ├── Sentinel.Core   → entidades, enums, regras de negócio e interfaces (sem dependência de tela ou banco)
 ├── Sentinel.Data   → DbContext, repositórios, seed (EF Core + SQLite)
+├── Sentinel.IA     → integração com o Claude (HttpClient), prompts e validação das respostas
 ├── Sentinel.App    → telas WinForms
 └── Sentinel.Tests  → testes xUnit
 ```
@@ -96,6 +97,41 @@ Demonstração: com o Dashboard aberto, use *Simular força bruta* e depois *Abr
 
 > Esta semana o banco ganhou o vínculo do incidente com o alerta (`AlertaOrigemId`). Gere uma migration nova: `dotnet ef migrations add Incidentes --project Sentinel.Data`. Se ainda não tiver dados que queira guardar, também pode apagar `Sentinel.Data/Migrations` e o `sentinel.db` e criar a `Inicial` de novo.
 
+## Semana 4 — assistente de IA
+
+O assistente faz três coisas, sempre como **sugestão** (quem decide é a pessoa):
+
+| Onde | Botão | O que faz |
+|---|---|---|
+| Monitoramento (alertas) | Explicar alerta (IA) | Explica o alerta, lista medidas preventivas e sugere um risco |
+| Monitoramento (eventos) | Sugerir gravidade do evento (IA) | Sugere uma gravidade e justifica; só muda se você clicar em *Aplicar* |
+| Detalhe do incidente | Resumir incidente (IA) | Resume o caso; só entra no histórico se você clicar em *Salvar no histórico* (marcado como gerado por IA) |
+
+### Dois modos
+
+- **Modo offline (padrão):** funciona sem internet e sem chave, com uma base de conhecimento local. É o que roda se nada for configurado.
+- **Claude (opcional):** ativa quando existe a variável de ambiente `ANTHROPIC_API_KEY`. Se a chamada falhar (sem internet, chave inválida, limite, resposta estranha), o app responde em modo offline e avisa na própria janela. O rodapé da tela principal mostra qual assistente está ativo.
+
+Configurar a chave no PowerShell, só para a sessão atual (feche e abra o terminal para remover):
+
+```powershell
+$env:ANTHROPIC_API_KEY = "cole-sua-chave-aqui"
+dotnet run --project Sentinel.App
+```
+
+Variáveis opcionais: `SENTINEL_CLAUDE_MODEL` (padrão `claude-haiku-5-5`) e `SENTINEL_IA_OFFLINE=1` (força o modo offline mesmo com chave).
+
+### Segurança e privacidade da IA
+
+- **Só dados simulados** saem do computador, e **sem IP nem ids**: o contexto leva nome do dispositivo, tipo, sistema e textos curtos (limites de quantidade e de tamanho).
+- **Chave nunca no código:** só variável de ambiente, só no cabeçalho `x-api-key`; nunca em log, mensagem de erro ou `ToString()`. Chave com caracteres estranhos é ignorada.
+- **Prompt injection:** descrições de eventos e notas são tratadas como dados não confiáveis, dentro de `<dados>`, com `<`, `>` e `&` escapados para ninguém fechar a tag; o prompt de sistema manda tratá-las como texto.
+- **Resposta validada:** só JSON no formato esperado, textos limpos e limitados, gravidade dentro do enum. Qualquer desvio cai no modo offline.
+- **Erros genéricos:** 401, 429, 5xx etc. viram frases fixas; o corpo da resposta nunca é repassado.
+- **Humano no comando:** a IA nunca altera dados sozinha.
+
+Não há mudança no banco nesta semana: não é preciso nova migration.
+
 ## Decisões de segurança
 
 - **Sem SQL montado na mão:** todo acesso ao banco passa pelo EF Core, que usa consultas parametrizadas. No filtro de busca, `%` e `_` digitados pelo usuário são tratados como texto, não como curingas.
@@ -104,8 +140,8 @@ Demonstração: com o Dashboard aberto, use *Simular força bruta* e depois *Abr
 - **Nomes sem caracteres de controle:** evita quebras de linha e caracteres invisíveis nos dados e, mais tarde, nos relatórios e nos prompts da IA.
 - **Erros sem vazamento:** o usuário vê uma mensagem clara; o detalhe técnico vai para `%LocalAppData%\Sentinel\logs\sentinel.log`.
 - **Incidentes com trilha de auditoria:** nada é apagado e toda mudança de status/risco fica registrada com a justificativa.
-- **Dados 100% simulados:** o app avisa isso na tela e não faz nenhuma conexão de rede.
-- Segredos (como a chave da API de IA, na Semana 4) ficarão em variável de ambiente ou User Secrets, nunca no repositório.
+- **Dados 100% simulados:** o app avisa isso na tela. A única conexão de rede possível é a consulta opcional ao Claude (Semana 4), e só quando existe a variável `ANTHROPIC_API_KEY`.
+- **Segredos fora do código:** a chave da API vive só em variável de ambiente, nunca no código nem no repositório.
 
 ## Mapeamento com os cursos da Cisco
 

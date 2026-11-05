@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Sentinel.Core.Entities;
+using Sentinel.Core.Enums;
 using Sentinel.Core.Interfaces;
 
 namespace Sentinel.Data;
@@ -28,6 +29,21 @@ public class MonitoramentoRepository : IMonitoramentoRepository
             .Where(a => a.DeviceId == deviceId && a.DataHora >= desde)
             .OrderBy(a => a.DataHora)
             .ToList();
+    }
+
+    public SecurityEvent? ObterEvento(int id)
+    {
+        using var db = CriarContexto();
+        return db.Events.AsNoTracking().Include(e => e.Device).FirstOrDefault(e => e.Id == id);
+    }
+
+    public void AtualizarGravidadeDoEvento(int id, Gravidade gravidade)
+    {
+        using var db = CriarContexto();
+        var existente = db.Events.Find(id)
+            ?? throw new InvalidOperationException($"Evento {id} não encontrado.");
+        existente.Gravidade = gravidade;
+        db.SaveChanges();
     }
 
     public Alerta? ObterAlerta(int id)

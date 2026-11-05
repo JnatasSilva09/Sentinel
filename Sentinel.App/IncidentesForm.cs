@@ -7,6 +7,7 @@ namespace Sentinel.App;
 public class IncidentesForm : Form
 {
     private readonly IncidentService _servico;
+    private readonly AssistenteService _assistente;
     private readonly ComboBox _cmbStatus = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 150 };
     private readonly ComboBox _cmbRisco = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 140 };
     private readonly TextBox _txtBusca = new() { PlaceholderText = "Buscar no título...", Width = 220 };
@@ -15,9 +16,10 @@ public class IncidentesForm : Form
     private readonly DataGridView _grade = Grades.Criar();
     private readonly Label _lblTotal = new() { Dock = DockStyle.Bottom, Height = 28, Padding = new Padding(8, 6, 0, 0) };
 
-    public IncidentesForm(IncidentService servico)
+    public IncidentesForm(IncidentService servico, AssistenteService assistente)
     {
         _servico = servico;
+        _assistente = assistente;
 
         Text = "SENTINEL — Incidentes";
         MinimumSize = new Size(760, 420);
@@ -102,7 +104,7 @@ public class IncidentesForm : Form
 
     private void Detalhar(int id)
     {
-        using (var detalhe = new IncidenteDetalheForm(_servico, id))
+        using (var detalhe = new IncidenteDetalheForm(_servico, _assistente, id))
             detalhe.ShowDialog(this);
         Recarregar();
     }

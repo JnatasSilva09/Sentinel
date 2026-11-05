@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Sentinel.Core\Sentinel.Core.csproj" />
     <ProjectReference Include="..\Sentinel.Data\Sentinel.Data.csproj" />
+    <ProjectReference Include="..\Sentinel.IA\Sentinel.IA.csproj" />
   </ItemGroup>
 
 </Project>

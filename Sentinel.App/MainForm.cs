@@ -12,6 +12,7 @@ public class MainForm : Form
     private readonly MonitoramentoService _monitoramento;
     private readonly IncidentService _incidentes;
     private readonly DashboardService _dashboard;
+    private readonly AssistenteService _assistente;
     private readonly Button _btnMonitor = new() { Text = "Monitoramento", AutoSize = true };
     private readonly Button _btnIncidentes = new() { Text = "Incidentes", AutoSize = true };
     private readonly Button _btnDashboard = new() { Text = "Dashboard", AutoSize = true };
@@ -24,6 +25,7 @@ public class MainForm : Form
     private readonly Button _btnEditar = new() { Text = "Editar", AutoSize = true };
     private readonly Button _btnExcluir = new() { Text = "Excluir", AutoSize = true };
     private readonly Label _lblTotal = new() { AutoSize = true, Padding = new Padding(0, 6, 0, 0) };
+    private readonly Label _lblAssistente = new() { AutoSize = true, Padding = new Padding(0, 6, 0, 0), ForeColor = Color.DimGray };
     private readonly Label _lblAviso = new()
     {
         Text = "Ambiente de demonstração: todos os dispositivos e eventos são simulados. Nada aqui toca uma rede real.",
@@ -41,12 +43,14 @@ public class MainForm : Form
         DeviceService servico,
         MonitoramentoService monitoramento,
         IncidentService incidentes,
-        DashboardService dashboard)
+        DashboardService dashboard,
+        AssistenteService assistente)
     {
         _servico = servico;
         _monitoramento = monitoramento;
         _incidentes = incidentes;
         _dashboard = dashboard;
+        _assistente = assistente;
 
         Text = "SENTINEL — Dispositivos (dados simulados)";
         MinimumSize = new Size(760, 420);
@@ -54,6 +58,7 @@ public class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
 
         MontarLayout();
+        _lblAssistente.Text = $"Assistente: {_assistente.NomeDoAssistente}";
 
         _cmbSistema.Items.Add(TodosOsSistemas);
         _cmbSistema.Items.AddRange(Enum.GetNames<SistemaOperacional>());
@@ -65,9 +70,9 @@ public class MainForm : Form
         _btnEditar.Click += (_, _) => Editar();
         _btnExcluir.Click += (_, _) => Excluir();
         // Monitoramento e Dashboard abrem em janelas livres: dá para simular eventos e ver os gráficos mudando.
-        _btnMonitor.Click += (_, _) => AbrirUnica(ref _janelaMonitor, () => new MonitorForm(_monitoramento, _incidentes));
+        _btnMonitor.Click += (_, _) => AbrirUnica(ref _janelaMonitor, () => new MonitorForm(_monitoramento, _incidentes, _assistente));
         _btnDashboard.Click += (_, _) => AbrirUnica(ref _janelaDashboard, () => new DashboardForm(_dashboard));
-        _btnIncidentes.Click += (_, _) => { using var lista = new IncidentesForm(_incidentes); lista.ShowDialog(this); };
+        _btnIncidentes.Click += (_, _) => { using var lista = new IncidentesForm(_incidentes, _assistente); lista.ShowDialog(this); };
         _grade.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) Editar(); };
         _grade.SelectionChanged += (_, _) => AtualizarBotoes();
 
@@ -111,6 +116,8 @@ public class MainForm : Form
             Coluna(nameof(Device.DataCadastro), "Cadastro", 20, "dd/MM/yyyy HH:mm"));
 
         var rodape = new Panel { Dock = DockStyle.Bottom, Height = 30, Padding = new Padding(8, 0, 8, 0) };
+        _lblAssistente.Dock = DockStyle.Right;
+        rodape.Controls.Add(_lblAssistente);
         rodape.Controls.Add(_lblTotal);
 
         _dicas.SetToolTip(_btnNovo, "Cadastrar um novo dispositivo (Ctrl+N)");

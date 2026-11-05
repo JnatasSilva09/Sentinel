@@ -1,4 +1,5 @@
 using Sentinel.Core.Entities;
+using Sentinel.Core.Enums;
 
 namespace Sentinel.Core.Interfaces;
 
@@ -8,6 +9,11 @@ public interface IMonitoramentoRepository
     IReadOnlyList<SecurityEvent> EventosDoDispositivo(int deviceId, DateTime desde, DateTime ate);
 
     IReadOnlyList<Alerta> AlertasDoDispositivo(int deviceId, DateTime desde);
+
+    /// <summary>Evento com o dispositivo carregado, ou null se não existir.</summary>
+    SecurityEvent? ObterEvento(int id);
+
+    void AtualizarGravidadeDoEvento(int id, Gravidade gravidade);
 
     /// <summary>Alerta com o dispositivo carregado, ou null se não existir.</summary>
     Alerta? ObterAlerta(int id);

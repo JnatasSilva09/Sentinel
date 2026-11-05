@@ -2,6 +2,7 @@ using Sentinel.Core.Deteccao;
 using Sentinel.Core.Services;
 using Sentinel.Core.Simulacao;
 using Sentinel.Data;
+using Sentinel.IA;
 
 namespace Sentinel.App;
 
@@ -32,7 +33,12 @@ internal static class Program
             var incidentes = new IncidentService(new IncidentRepository(opcoes), repositorioMonitoramento, motor);
             var dashboard = new DashboardService(new DashboardRepository(opcoes));
 
-            Application.Run(new MainForm(dispositivos, monitoramento, incidentes, dashboard));
+            // Sem ANTHROPIC_API_KEY o assistente roda 100% offline. Com a chave, usa o Claude (e volta ao offline se falhar).
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(25) };
+            var assistenteIa = AssistenteFactory.Criar(ConfiguracaoClaude.DeAmbiente(), http);
+            var assistente = new AssistenteService(assistenteIa, repositorioMonitoramento, incidentes);
+
+            Application.Run(new MainForm(dispositivos, monitoramento, incidentes, dashboard, assistente));
         }
         catch (Exception ex)
         {

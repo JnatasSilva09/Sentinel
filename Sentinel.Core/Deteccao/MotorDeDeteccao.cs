@@ -6,6 +6,11 @@ namespace Sentinel.Core.Deteccao;
 /// <summary>Aplica todas as regras a cada evento novo e evita alertas repetidos para o mesmo problema.</summary>
 public sealed class MotorDeDeteccao
 {
+    public const string RegraForcaBruta = "Força bruta de login";
+    public const string RegraVarredura = "Varredura de portas repetida";
+    public const string RegraForaDoHorario = "Acessos fora do horário";
+    public const string RegraMalware = "Malware detectado";
+
     private readonly IReadOnlyList<IRegraDeteccao> _regras;
 
     public MotorDeDeteccao(IEnumerable<IRegraDeteccao> regras) => _regras = regras.ToList();
@@ -18,19 +23,19 @@ public sealed class MotorDeDeteccao
     public static MotorDeDeteccao Padrao() => new(new IRegraDeteccao[]
     {
         new RegraPorContagem(
-            "Força bruta de login", TipoEvento.LoginFalho, limite: 5, TimeSpan.FromMinutes(2), Gravidade.Alta,
+            RegraForcaBruta, TipoEvento.LoginFalho, limite: 5, TimeSpan.FromMinutes(2), Gravidade.Alta,
             "{n} tentativas de login falhas em até {janela}. Possível ataque de força bruta: confira a origem e considere bloquear a conta ou o IP."),
 
         new RegraPorContagem(
-            "Varredura de portas repetida", TipoEvento.VarreduraDePortas, limite: 3, TimeSpan.FromMinutes(10), Gravidade.Alta,
+            RegraVarredura, TipoEvento.VarreduraDePortas, limite: 3, TimeSpan.FromMinutes(10), Gravidade.Alta,
             "{n} varreduras de portas em até {janela}. Alguém pode estar mapeando os serviços expostos deste dispositivo."),
 
         new RegraPorContagem(
-            "Acessos fora do horário", TipoEvento.AcessoForaDoHorario, limite: 2, TimeSpan.FromMinutes(60), Gravidade.Media,
+            RegraForaDoHorario, TipoEvento.AcessoForaDoHorario, limite: 2, TimeSpan.FromMinutes(60), Gravidade.Media,
             "{n} acessos fora do horário comercial em até {janela}. Confirme com o usuário se foram legítimos."),
 
         new RegraPorContagem(
-            "Malware detectado", TipoEvento.MalwareDetectado, limite: 1, TimeSpan.FromMinutes(5), Gravidade.Critica,
+            RegraMalware, TipoEvento.MalwareDetectado, limite: 1, TimeSpan.FromMinutes(5), Gravidade.Critica,
             "Malware detectado neste dispositivo. Isole-o da rede e faça uma verificação completa antes de religar.")
     });
 
